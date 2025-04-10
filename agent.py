@@ -11,68 +11,6 @@ def is_valid(c, r):
     """Check if coordinates are within the board bounds."""
     return 0 <= c < BOARD_SIZE and 0 <= r < BOARD_SIZE
 
-# def check_winning(board, position, player):
-#     r, c = position
-#     directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-#     for dr, dc in directions:
-#         count = 1
-#         for i in range(1, 6):
-#             nr, nc = r + i * dr, c + i * dc
-#             if not is_valid(nr, nc) or board[nr][nc] != player:
-#                 break
-#             count += 1
-#         for i in range(1, 6):
-#             nr, nc = r - i * dr, c - i * dc
-#             if not is_valid(nr, nc) or board[nr][nc] != player:
-#                 break
-#             count += 1
-#         if count >= 6:
-#             return True
-#     return False  
-
-# def winning_in_k_moves(board, player, k):
-#     empty_cells = get_empty_cells(board)
-#     if k == 1:
-#         for r, c in empty_cells:
-#             board[r][c] = player
-#             if check_winning(board, (r, c), player):
-#                 board[r][c] = 0
-#                 return (r, c)
-#             board[r][c] = 0
-#         return None
-    
-#     for r, c in empty_cells:
-#         board[r][c] = player
-#         if winning_in_k_moves(board, player, k - 1):
-#             board[r][c] = 0
-#             return (r, c)
-#         board[r][c] = 0
-#     return None
-
-# def check_win(board, player):
-#     """
-#     Checks if the given player has won on the board.
-#     A win is 6 consecutive stones horizontally, vertically, or diagonally.
-#     """
-#     # Directions to check: Horizontal, Vertical, Diagonal Down-Right, Diagonal Up-Right
-#     directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-
-#     for r in range(BOARD_SIZE):
-#         for c in range(BOARD_SIZE):
-#             if board[r][c] == player:
-#                 for dr, dc in directions:
-#                     count = 0
-#                     for i in range(6):
-#                         nr, nc = r + i * dr, c + i * dc
-#                         if is_valid(nr, nc) and board[nr][nc] == player:
-#                             count += 1
-#                         else:
-#                             break # Not consecutive in this direction
-#                     if count == 6:
-#                         return True # Found a win
-#     return False # No win found for this player
-
-
 def find_patterns(board, player):
     """
     Return all the patterns found in this board.
