@@ -9,7 +9,7 @@ patterns = [
 
 env = Game2048Env()
 approximator = NTupleApproximator(board_size=4, patterns=patterns)
-td_mcts = TD_MCTS(env, approximator, iterations=100, exploration_constant=1.41, V_norm=80000)
+td_mcts = TD_MCTS(env, approximator, iterations=100, exploration_constant=1.41, V_norm=1000)
 
 def get_action(state, score):
     env.board = state.copy()
