@@ -9,6 +9,8 @@ import random
 import math
 import os # For saving/loading LUTs
 from collections import defaultdict # For easier LUT implementation
+import copy
+
 
 COLOR_MAP = {
     0: "#cdc1b4", 2: "#eee4da", 4: "#ede0c8", 8: "#f2b179",
@@ -226,7 +228,6 @@ class Game2048Env(gym.Env):
         else:
             raise ValueError("Invalid action")
 
-
 class NTupleApproximator:
     def __init__(self, board_size, patterns):
         self.board_size = board_size
@@ -322,6 +323,135 @@ class NTupleApproximator:
             self.luts = [defaultdict(float) for _ in range(self.num_tuples)]
 
 
+class TD_MCTS_Node:
+    def __init__(self, state, parent=None, action=None, is_afterstate=False):
+        """
+        state: current board state (numpy array)
+        score: cumulative score at this node
+        parent: parent node (None for root)
+        action: action taken from parent to reach this node (None for root)
+        is_afterstate: True if this node is an afterstate node (chance node), else a regular state (max node)
+        prob: probability of reaching this node from its parent (used for chance node)
+        """
+        self.state = state.copy()
+        self.parent = parent
+        self.action = action
+        self.is_afterstate = is_afterstate
+
+        self.children = {}
+        self.visits = 0
+        self.total_reward = 0
+
+        if not is_afterstate:
+            env = Game2048Env()
+            env.board = state
+            self.untried_actions = [a for a in range(4) if env.is_move_legal(a)]
+        else:
+            self.untried_actions = []  # afterstates will get states as children, not actions
+
+    def fully_expanded(self):
+        return len(self.untried_actions) == 0
+
+    def is_terminal(self):
+        return len([a for a in range(4) if env.is_move_legal(a)]) == 0
+
+
+class TD_MCTS:
+    def __init__(self, env, approximator, iterations=500, exploration_constant=1.41, V_norm=80000):
+        self.env = env
+        self.approximator = approximator
+        self.iterations = iterations
+        self.c = exploration_constant
+        self.V_norm = V_norm
+
+    def create_env_from_state(self, state, score):
+        new_env = copy.deepcopy(self.env)
+        new_env.board = state.copy()
+        new_env.score = score
+        return new_env
+
+    def select_child(self, node, env):
+        log_parent_visits = math.log(node.visits + 1)
+        best_node = max(
+            node.children.values(), 
+            key=lambda child: 
+                (child.total_reward / child.visits) \
+                + self.c * math.sqrt(log_parent_visits / child.visits)
+        )
+        _, _, _, afterstate = env.step(best_node.action)
+        env.board = afterstate
+        return best_node
+
+    def evaluate(self, env):
+        best_value = 0
+        for action in range(4):
+            if env.is_move_legal(action):
+                sim_env = copy.deepcopy(env)
+                _, reward, done, after_state = sim_env.step(action)
+                value = reward + self.approximator.value(after_state)
+                best_value = max(best_value, value)
+        return best_value
+
+    def backpropagate(self, node, norm_value):
+        while node is not None:
+            node.visits += 1
+            node.total_reward += norm_value
+            node = node.parent
+
+    def expand_normal_state(self, node, sim_env):
+        legal_move = node.untried_actions
+        action = legal_move.pop()
+        _, reward, done, after_state = sim_env.step(action)
+        sim_env.board = after_state
+        after_node = TD_MCTS_Node(
+            state=after_state,
+            parent=node,
+            action=action,
+            is_afterstate=True
+        )
+        after_node.value = self.approximator.value(after_state)
+        node.children[action] = after_node
+        return after_node
+
+
+    def expand_afterstate(self, node, sim_env):
+        empty_cells = [(i, j) for i in range(4) for j in range(4) if node.state[i][j] == 0]
+        if not empty_cells:
+            return node
+        i, j = random.choice(empty_cells)
+        sim_env.board[i][j] = 2 if random.random() < 0.9 else 4
+        key = (i, j, sim_env.board[i][j])
+        if key not in node.children:
+            child_node = TD_MCTS_Node(
+                state=sim_env.board,
+                parent=node
+            )
+            node.children[key] = child_node
+        return node.children[key]
+
+
+    def run_simulation(self, root):
+        node = root
+        sim_env = self.create_env_from_state(node.state, 0)
+
+        while not node.untried_actions and node.children:
+            node = self.select_child(node, sim_env)
+            node = self.expand_afterstate(node, sim_env)
+
+        if node.untried_actions:
+            node = self.expand_normal_state(node, sim_env)
+            node = self.expand_afterstate(node, sim_env)
+
+        assert np.array_equal(sim_env.board, node.state)
+        value = self.evaluate(sim_env)
+        # print("Value: ", value)
+        norm_value = value / self.V_norm
+        self.backpropagate(node, norm_value)
+
+    def best_action(self, root):
+        best_action = max(root.children, key=lambda action: root.children[action].visits)
+        return best_action
+
 def select_best_action_2_step(env, approximator):
     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
 
@@ -401,10 +531,16 @@ def main(env: Game2048Env, approximator, num_episodes=5):
     for episode in range(num_episodes):
         env.reset()
         done = False
+        
+        td_mcts = TD_MCTS(env, approximator, iterations=100, exploration_constant=1.41)
 
         while not done:
-            action = select_best_action_2_step(env, approximator)
-            _, current_score, done, _ = env.step(action)
+            root = TD_MCTS_Node(env.board)
+            for _ in range(td_mcts.iterations):
+                td_mcts.run_simulation(root)
+            action = td_mcts.best_action(root)
+            state, _, done, _ = env.step(action)
+            print(state)
 
         print(f"Game {episode + 1} completed! Score: ", env.score)
         final_scores.append(env.score)

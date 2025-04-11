@@ -280,12 +280,3 @@ def select_move(board, color):
     logger.debug("No winning or defending, using MCTS")
     best_move = generate_best_move(board)    
     return best_move
-
-
-    
-
-
-
-
-
-    
