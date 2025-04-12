@@ -109,9 +109,9 @@ class Connect6Game:
             print("? Game over")
             return
 
-        empty_positions = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r, c] == 0]
-        selected = random.sample(empty_positions, 1)
-        selected = [agent.select_move(self.board, color)]
+        from contextlib import redirect_stdout
+        with redirect_stdout(sys.stderr):
+            selected = [agent.select_move(self.board, color)]
         
         move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
         
@@ -119,6 +119,7 @@ class Connect6Game:
 
         print(f"{move_str}\n\n", end='', flush=True)
         print(move_str, file=sys.stderr)
+        return
 
     def show_board(self):
         """Displays the board as text."""
